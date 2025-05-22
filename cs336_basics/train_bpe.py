@@ -3,12 +3,13 @@ import time
 import os
 from typing import BinaryIO
 import multiprocessing
+import json
 
 def find_chunk_boundaries(
     file: BinaryIO, 
     desired_num_chunks: int, 
     split_special_token: bytes
-) -> list[int]:
+    ) -> list[int]:
     """
     Chunk the file into parts that can be counted independently.
     May return fewer chunks if the boundaries end up overlapping.
@@ -76,7 +77,7 @@ def train_bpe(
     vocab_size: int,
     special_tokens: list[str], 
     num_processes: int=8
-):
+    ):
 
     ### read text from input_path
     # with open(input_path, 'r') as file:
@@ -192,6 +193,14 @@ if __name__ == "__main__":
     vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
     end = time.time()
 
-    print(merges)
-    print(vocab)
-    print(end-start)
+    # print(merges)
+    # print(vocab)
+    print("Total time taken", end-start)
+
+    result_path = "/home/ec2-user/bpe-tokenizer/"
+    with open(f'{result_path}merges.txt', 'w') as f:
+        for line in merges:
+            f.write(f"{line}\n")
+    with open(f'{result_path}vocab.json', 'w') as file:
+        json.dump({k: str(vocab[k]) for k in vocab}, file)
+
