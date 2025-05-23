@@ -48,7 +48,7 @@ class tokenizer():
         obj.__init__(vocab=vocab, merges=merges, special_tokens=special_tokens)
         return obj
     
-    def _pre_tokenize(self, text: str):
+    def _split_by_speical_tokens(self, text: str) -> list[str]:
 
         ## handle special tokens here
         if len(self.special_tokens) > 0:
@@ -59,20 +59,8 @@ class tokenizer():
             # print("text after split by special tokens", text_split_special_token)
         else:
             text_split_special_token = [text]
-
-        pre_tokenize_results = []
-        PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
         
-        for text_i in text_split_special_token:
-            if text_i in self.special_tokens_set:
-                pre_tokenize_results.append(text_i.encode("utf-8"))
-            else:
-                pre_token_list = []
-                for s in re.finditer(PAT, text_i):
-                    pre_token_list.append(s.group(0).encode("utf-8"))
-                pre_tokenize_results.append(pre_token_list)
-
-        return pre_tokenize_results
+        return text_split_special_token
     
     def _apply_merges_to_pre_token(self, pre_token: bytes) -> tuple[bytes]:
         
@@ -107,15 +95,18 @@ class tokenizer():
         """
         Encode an input text into a sequence of token IDs.
         """
-        pre_token_seq = self._pre_tokenize(text)
-        # print(pre_token_seq)
 
+        text_split_special_token = self._split_by_speical_tokens(text)
+        
+        PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+        
         encode_ids = []
-        for pre_token_list in pre_token_seq:
-            if type(pre_token_list) != list: ## it is a special token
-                encode_ids.append(self._bytes_to_id_dict.get(pre_token_list))
-            elif len(pre_token_list) > 0: ## unpack list and apply merges to each pre-token
-                for pre_token in pre_token_list:
+        for text_i in text_split_special_token:
+            if text_i in self.special_tokens_set: ## it is a special token
+                encode_ids.append(self._bytes_to_id_dict.get(text_i.encode("utf-8")))
+            else:
+                for s in re.finditer(PAT, text_i): ## pre-token
+                    pre_token = s.group(0).encode("utf-8")
                     merged_pre_token = self._apply_merges_to_pre_token(pre_token)
                     for b in merged_pre_token:
                         encode_ids.append(self._bytes_to_id_dict.get(b))
