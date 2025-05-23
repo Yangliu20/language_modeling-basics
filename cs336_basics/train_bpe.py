@@ -62,7 +62,7 @@ def pretokenize_chunk(start, end, input_path, special_tokens):
         chunk = f.read(end - start).decode("utf-8", errors="ignore")
 
         # Run pre-tokenization on your chunk and store the counts for each pre-token
-        text_splits = re.split("|".join(special_tokens), chunk)
+        text_splits = re.split("|".join([token.replace("|", "\\|") for token in special_tokens]), chunk)
         for text_i in text_splits:
             # if text_i == "|":
             #     continue
