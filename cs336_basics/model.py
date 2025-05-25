@@ -83,6 +83,38 @@ class rmsnorm(nn.Module):
         return result.to(in_dtype)
 
 
+class positionwise_feedforward(nn.Module):
+    """
+    position-wise feed-forward network with SwiGLU
+    """
+    def __init__(self, d_model: int, d_ff: int=None, device=None, dtype=None):
+        super().__init__()
+        if not d_ff:
+            d_ff = int((d_model*8/3) // 64) * 64
+        self.w1 = nn.Parameter(torch.empty((d_ff, d_model), dtype=dtype))
+        self.w2 = nn.Parameter(torch.empty((d_model, d_ff), dtype=dtype))
+        self.w3 = nn.Parameter(torch.empty((d_ff, d_model), dtype=dtype))
+        std = math.sqrt(2/(d_ff+d_model))
+        nn.init.trunc_normal_(self.w1, mean=0, std=std, a=-3*std, b=3*std)
+        nn.init.trunc_normal_(self.w2, mean=0, std=std, a=-3*std, b=3*std)
+        nn.init.trunc_normal_(self.w3, mean=0, std=std, a=-3*std, b=3*std)
+        if not device:
+            self.w1 = self.w1.to(device)
+            self.w2 = self.w2.to(device)
+            self.w3 = self.w3.to(device)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x dim (batch_size, sequence_length, d_model)
+        """
+        def SiLU(x):
+            return x * torch.sigmoid(x)
+        output_1 = SiLU( einsum(x, self.w1, "... d_in, d_out d_in -> ... d_out") )
+        output_3 = einsum(x, self.w3, "... d_in, d_out d_in -> ... d_out") 
+        output_final = einsum( output_1 * output_3, self.w2, "... d_in, d_out d_in -> ... d_out")
+        return output_final
+
+
 if __name__ == "__main__":
 
     # layer = Linear(in_features=20, out_features=10)
