@@ -115,19 +115,75 @@ class positionwise_feedforward(nn.Module):
         return output_final
 
 
+class RotaryPositionalEmbedding(nn.Module):
+    """
+    A class that applies RoRE to the input tensor. 
+    """
+    def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None):
+        """
+        theta: float, \theta value for the RoPE
+        d_k: int, dimension of query and key vectors
+        max_seq_len: int, Maximum sequence length that will be inputted 
+        device: torch.device | None = None, Device to store the buffer on
+        """
+        super().__init__()
+        self.d_k = d_k
+
+        # i: token position; k: embedding index
+        angle = einsum(torch.arange(max_seq_len), 1/torch.pow(theta, (torch.arange(d_k/2))*2/d_k), "token_id, embed_id -> token_id embed_id")
+        print(angle)
+        self.register_buffer("sin", torch.sin(angle), persistent=False)
+        self.register_buffer("cos", torch.cos(angle), persistent=False)
+
+        if not device:
+            self.sin = self.sin.to(device)
+            self.cos = self.cos.to(device)
+
+    
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
+        """
+        x dim (..., seq_len, d_k)
+        token_positions (..., seq_len)
+        """
+        seq_len = token_positions.shape[-1]
+
+        ## dim: (..., seq_len, d_k/2)
+        sin_slice = self.sin[token_positions, :]
+        cos_slice = self.cos[token_positions, :]
+        # print(sin_slice.shape)
+
+        ## construct rotation matrix: (..., seq_len, d_k, d_k)
+        # fill diagonal with cos
+        rotation = torch.diag_embed(torch.repeat_interleave(cos_slice, 2, dim=-1))
+        # fill upper diagonal with -sin
+        rotation[..., torch.arange(0, self.d_k, 2), torch.arange(1, self.d_k, 2)] = -sin_slice
+        # fill lower diagonal with sin
+        rotation[..., torch.arange(1, self.d_k, 2), torch.arange(0, self.d_k, 2)] = sin_slice
+        # print(rotation.shape)
+
+        return einsum(rotation, x, "... seq_len d_k_out d_k_in, ... seq_len d_k_in -> ... seq_len d_k_out")
+
+
+
 if __name__ == "__main__":
 
     # layer = Linear(in_features=20, out_features=10)
     # print(layer.state_dict())
 
-    embedding_layer = Embedding(num_embeddings=10, embedding_dim=3)
-    weight = torch.linspace(1, 30, 30).reshape((10, 3))
-    print(weight)
-    embedding_layer.load_state_dict({"weight": weight})
-    token_ids = torch.tensor([
-        [5,2,3,8], 
-        [1,9,6,1], 
-    ], dtype=torch.long)
-    output = embedding_layer(token_ids)
-    print(output.shape)
-    print(output)
+    # embedding_layer = Embedding(num_embeddings=10, embedding_dim=3)
+    # weight = torch.linspace(1, 30, 30).reshape((10, 3))
+    # print(weight)
+    # embedding_layer.load_state_dict({"weight": weight})
+    # token_ids = torch.tensor([
+    #     [5,2,3,8], 
+    #     [1,9,6,1], 
+    # ], dtype=torch.long)
+    # output = embedding_layer(token_ids)
+    # print(output.shape)
+    # print(output)
+
+
+    pos_emb = RotaryPositionalEmbedding(theta=2., d_k=20, max_seq_len=7)
+    x = torch.randn((1, 7, 20))
+    token_positions = torch.arange(7).reshape(1, -1)
+    pos_emb(x=x, token_positions=token_positions)
