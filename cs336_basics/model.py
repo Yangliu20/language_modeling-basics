@@ -49,6 +49,38 @@ class Embedding(nn.Module):
         return self.weight[token_ids]
 
 
+class rmsnorm(nn.Module):
+    """
+    Root Mean Square Layer Normalization
+    """
+    def __init__(self, d_model: int, eps: float = 1e-5, device=None, dtype=None):
+        """
+        d_model: int, Hidden dimension of the model
+        eps: float = 1e-5 ,Epsilon value for numerical stability
+        device: torch.device | None = None, Device to store the parameters on 
+        dtype: torch.dtype | None = None, Data type of the parameters
+        """
+        super().__init__()
+        self.d_model = d_model
+        self.eps = eps
+        self.weight = nn.Parameter(torch.ones((d_model, ), dtype=dtype))
+        if not device:
+            self.weight = self.weight.to(device)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Process an input tensor of shape (batch_size, sequence_length, d_model) and return a tensor of the same shape.
+        """
+
+        ## upcast the input to torch.float32 before performing the normalization, to prevent overflow
+        ## later downcast to the original dtype
+        in_dtype = x.dtype
+        x = x.to(torch.float32)
+
+        rms = torch.sqrt( torch.pow(x, 2).sum(dim=2, keepdim=True) / self.d_model + self.eps ) # (batch_size, sequence_length, 1)
+        result = x / rms * rearrange(self.weight, "d_model -> 1 1 d_model")
+
+        return result.to(in_dtype)
 
 
 if __name__ == "__main__":
