@@ -282,6 +282,47 @@ class TransformerBlock(nn.Module):
         return out_2
 
 
+class TransformerLM(nn.Module):
+    """
+    Full language model. 
+    """
+    def __init__(self, vocab_size: int, context_length: int, num_layers: int, d_model: int, num_heads: int, d_ff: int, rope_theta: float):
+        """
+        vocab_size: int, The size of the vocabulary, necessary for determining the dimensionality of the token embedding matrix.
+        context_length: int, The maximum context length, necessary for determining the dimensionality of the position embedding matrix.
+        num_layers: int, The number of Transformer blocks to use.
+        d_model: int, Dimensionality of the Transformer block inputs.
+        num_heads: int, Number of heads to use in multi-head self-attention. 
+        d_ff: int, Dimensionality of the position-wise feed-forward inner layer.
+        rope_theta: float, The RoPE Theta parameter.
+        """
+        super().__init__()
+
+        self.token_embeddings = Embedding(num_embeddings=vocab_size, embedding_dim=d_model)
+        rope = RotaryPositionalEmbedding(theta=rope_theta, d_k=d_model//num_heads, max_seq_len=context_length)
+
+        self.ln_final = rmsnorm(d_model=d_model)
+        self.lm_head = Linear(in_features=d_model, out_features=vocab_size)
+
+        self.layers = nn.Sequential()
+        for i in range(num_layers):
+            self.layers.add_module(f"{i}", TransformerBlock(d_model, num_heads, d_ff, positional_embedding_layer=rope))
+        
+    def forward(self, x: torch.Tensor):
+        """
+        x: Int[Tensor, "batch_size sequence_length"]
+        """
+        
+        ## embedding -> transformer blocks
+        out = self.layers(self.token_embeddings(x))
+
+        ## norm, linear
+        out_score = self.lm_head(self.ln_final(out))
+
+        return out_score
+
+
+
 
 if __name__ == "__main__":
 
