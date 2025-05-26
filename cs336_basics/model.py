@@ -241,6 +241,46 @@ class MultiHeadSelfAttention(nn.Module):
         return output
 
 
+class TransformerBlock(nn.Module):
+    """
+    A transfomer block that contains two 'sublayers', one for the multihead self attention, and another for the feed-forward network. 
+    In each sublayer, first perform RMSNorm, then the main operation (MHA/FF), finally adding in the residual connection
+    """
+    def __init__(self, d_model: int, num_heads: int, d_ff: int): 
+        """
+        d_model: int, Dimensionality of the Transformer block inputs.
+        num_heads: int, Number of heads to use in multi-head self-attention. 
+        d_ff: int, Dimensionality of the position-wise feed-forward inner layer.
+        """
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_ff = d_ff
+
+        self.ln1 = rmsnorm(d_model=d_model)
+        self.ln2 = rmsnorm(d_model=d_model)
+        self.attn = MultiHeadSelfAttention(d_model=d_model, num_heads=num_heads)
+        self.ffn = positionwise_feedforward(d_model=d_model, d_ff=d_ff)
+    
+    def forward(self, x: torch.Tensor, positional_embedding_layer: Union[nn.Module, None] = None) -> torch.Tensor:
+        """
+        x dim (batch_size, seq_len, d_model)
+        """
+
+        ## token_positions dim: (batch_size num_heads seq_len)
+        seq_len = x.shape[-2]
+        token_positions = rearrange(torch.arange(seq_len), "seq_len -> 1 1 seq_len")
+
+        ## out_1 dim: (batch_size, seq_len, d_model)
+        out_1 = x + self.attn(self.ln1(x), positional_embedding_layer, token_positions)
+
+        ## out_2 dim: (batch_size, seq_len, d_model)
+        out_2 = out_1 + self.ffn(self.ln2(out_1))
+
+        return out_2
+
+
+
 if __name__ == "__main__":
 
     # layer = Linear(in_features=20, out_features=10)
