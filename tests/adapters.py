@@ -195,15 +195,15 @@ def run_multihead_self_attention_with_rope(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    attention_layer = model.MultiHeadSelfAttention(d_model=d_model, num_heads=num_heads)
     rope = model.RotaryPositionalEmbedding(theta=theta, d_k=d_model//num_heads, max_seq_len=max_seq_len)
+    attention_layer = model.MultiHeadSelfAttention(d_model=d_model, num_heads=num_heads, positional_embedding_layer=rope)
     attention_layer.load_state_dict({
         "q_proj.weight": q_proj_weight, 
         "k_proj.weight": k_proj_weight, 
         "v_proj.weight": v_proj_weight, 
         "output_proj.weight": o_proj_weight
     })
-    return attention_layer(x=in_features, positional_embedding_layer=rope, token_positions=token_positions)
+    return attention_layer(x=in_features, token_positions=token_positions)
 
 
 def run_rope(
@@ -300,9 +300,9 @@ def run_transformer_block(
         running the Transformer block on the input features while using RoPE.
     """
     rope = model.RotaryPositionalEmbedding(theta=theta, d_k=d_model//num_heads, max_seq_len=max_seq_len)
-    transformer = model.TransformerBlock(d_model=d_model, num_heads=num_heads, d_ff=d_ff)
+    transformer = model.TransformerBlock(d_model=d_model, num_heads=num_heads, d_ff=d_ff, positional_embedding_layer=rope)
     transformer.load_state_dict(weights)
-    return transformer(x=in_features, positional_embedding_layer=rope)
+    return transformer(x=in_features)
 
 
 def run_transformer_lm(

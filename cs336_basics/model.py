@@ -188,7 +188,7 @@ class MultiHeadSelfAttention(nn.Module):
     """
     Causal multi-head self-attention
     """
-    def __init__(self, d_model: int, num_heads: int, device=None, dtype=None):
+    def __init__(self, d_model: int, num_heads: int, positional_embedding_layer: Union[nn.Module, None] = None, device=None, dtype=None):
         """
         d_model: int Dimensionality of the Transformer block inputs. 
         num_heads: int Number of heads to use in multi-head self-attention.
@@ -203,8 +203,10 @@ class MultiHeadSelfAttention(nn.Module):
         self.k_proj = Linear(out_features=self.num_heads*self.d_k, in_features=self.d_model, device=device, dtype=dtype)
         self.v_proj = Linear(out_features=self.num_heads*self.d_v, in_features=self.d_model, device=device, dtype=dtype)
         self.output_proj = Linear(out_features=self.d_model, in_features=self.num_heads*self.d_v, device=device, dtype=dtype)
+
+        self.positional_embedding_layer = positional_embedding_layer
     
-    def forward(self, x: torch.Tensor, positional_embedding_layer: Union[nn.Module, None] = None, token_positions: Union[torch.Tensor, None] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, token_positions: Union[torch.Tensor, None] = None) -> torch.Tensor:
         """
         x dim: (batch_size, seq_len, d_model)
         positional_embedding_layer: nn.Module that applies Rotary Positional Embedding
@@ -222,9 +224,9 @@ class MultiHeadSelfAttention(nn.Module):
         V_heads = rearrange(V, "... seq_len (num_heads d_v) -> ... num_heads seq_len d_v", num_heads=self.num_heads, d_v=self.d_v)
 
         ## apply rotary positional embedding to query and key vectors
-        if positional_embedding_layer is not None:
-            Q_heads = positional_embedding_layer(x=Q_heads, token_positions=token_positions)
-            K_heads = positional_embedding_layer(x=K_heads, token_positions=token_positions)
+        if self.positional_embedding_layer is not None:
+            Q_heads = self.positional_embedding_layer(x=Q_heads, token_positions=token_positions)
+            K_heads = self.positional_embedding_layer(x=K_heads, token_positions=token_positions)
 
         ## create causal mask
         seq_len_q = Q.shape[-2]
@@ -246,7 +248,7 @@ class TransformerBlock(nn.Module):
     A transfomer block that contains two 'sublayers', one for the multihead self attention, and another for the feed-forward network. 
     In each sublayer, first perform RMSNorm, then the main operation (MHA/FF), finally adding in the residual connection
     """
-    def __init__(self, d_model: int, num_heads: int, d_ff: int): 
+    def __init__(self, d_model: int, num_heads: int, d_ff: int, positional_embedding_layer: Union[nn.Module, None] = None): 
         """
         d_model: int, Dimensionality of the Transformer block inputs.
         num_heads: int, Number of heads to use in multi-head self-attention. 
@@ -259,10 +261,10 @@ class TransformerBlock(nn.Module):
 
         self.ln1 = rmsnorm(d_model=d_model)
         self.ln2 = rmsnorm(d_model=d_model)
-        self.attn = MultiHeadSelfAttention(d_model=d_model, num_heads=num_heads)
+        self.attn = MultiHeadSelfAttention(d_model=d_model, num_heads=num_heads, positional_embedding_layer=positional_embedding_layer)
         self.ffn = positionwise_feedforward(d_model=d_model, d_ff=d_ff)
     
-    def forward(self, x: torch.Tensor, positional_embedding_layer: Union[nn.Module, None] = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         x dim (batch_size, seq_len, d_model)
         """
@@ -272,7 +274,7 @@ class TransformerBlock(nn.Module):
         token_positions = rearrange(torch.arange(seq_len), "seq_len -> 1 1 seq_len")
 
         ## out_1 dim: (batch_size, seq_len, d_model)
-        out_1 = x + self.attn(self.ln1(x), positional_embedding_layer, token_positions)
+        out_1 = x + self.attn(self.ln1(x), token_positions)
 
         ## out_2 dim: (batch_size, seq_len, d_model)
         out_2 = out_1 + self.ffn(self.ln2(out_1))
