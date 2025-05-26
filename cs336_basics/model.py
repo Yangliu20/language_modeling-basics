@@ -226,9 +226,11 @@ class MultiHeadSelfAttention(nn.Module):
             self.weight_value = self.weight_value.to(device)
             self.weight_output = self.weight_output.to(device)
     
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, positional_embedding_layer: Union[nn.Module, None] = None, token_positions: Union[torch.Tensor, None] = None) -> torch.Tensor:
         """
         x dim: (batch_size, seq_len, d_model)
+        positional_embedding_layer: nn.Module that applies Rotary Positional Embedding
+        token_positions: torch.Tensor
         """
 
         ## compute the key, value, and query projections
@@ -240,6 +242,11 @@ class MultiHeadSelfAttention(nn.Module):
         Q_heads = rearrange(Q, "... seq_len (num_heads d_k) -> ... num_heads seq_len d_k", num_heads=self.num_heads, d_k=self.d_k)
         K_heads = rearrange(K, "... seq_len (num_heads d_k) -> ... num_heads seq_len d_k", num_heads=self.num_heads, d_k=self.d_k)
         V_heads = rearrange(V, "... seq_len (num_heads d_v) -> ... num_heads seq_len d_v", num_heads=self.num_heads, d_v=self.d_v)
+
+        ## apply rotary positional embedding to query and key vectors
+        if positional_embedding_layer is not None:
+            Q_heads = positional_embedding_layer(x=Q_heads, token_positions=token_positions)
+            K_heads = positional_embedding_layer(x=K_heads, token_positions=token_positions)
 
         ## create causal mask
         seq_len_q = Q.shape[-2]
