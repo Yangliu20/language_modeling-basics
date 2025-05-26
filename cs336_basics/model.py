@@ -92,17 +92,9 @@ class positionwise_feedforward(nn.Module):
         super().__init__()
         if not d_ff:
             d_ff = int((d_model*8/3) // 64) * 64
-        self.w1 = nn.Parameter(torch.empty((d_ff, d_model), dtype=dtype))
-        self.w2 = nn.Parameter(torch.empty((d_model, d_ff), dtype=dtype))
-        self.w3 = nn.Parameter(torch.empty((d_ff, d_model), dtype=dtype))
-        std = math.sqrt(2/(d_ff+d_model))
-        nn.init.trunc_normal_(self.w1, mean=0, std=std, a=-3*std, b=3*std)
-        nn.init.trunc_normal_(self.w2, mean=0, std=std, a=-3*std, b=3*std)
-        nn.init.trunc_normal_(self.w3, mean=0, std=std, a=-3*std, b=3*std)
-        if not device:
-            self.w1 = self.w1.to(device)
-            self.w2 = self.w2.to(device)
-            self.w3 = self.w3.to(device)
+        self.w1 = Linear(in_features=d_model, out_features=d_ff, device=device, dtype=dtype)
+        self.w2 = Linear(in_features=d_ff, out_features=d_model, device=device, dtype=dtype)
+        self.w3 = Linear(in_features=d_model, out_features=d_ff, device=device, dtype=dtype)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -110,9 +102,9 @@ class positionwise_feedforward(nn.Module):
         """
         def SiLU(x):
             return x * torch.sigmoid(x)
-        output_1 = SiLU( einsum(x, self.w1, "... d_in, d_out d_in -> ... d_out") )
-        output_3 = einsum(x, self.w3, "... d_in, d_out d_in -> ... d_out") 
-        output_final = einsum( output_1 * output_3, self.w2, "... d_in, d_out d_in -> ... d_out")
+        output_1 = SiLU( self.w1(x) )
+        output_3 = self.w3(x)
+        output_final = self.w2(output_1 * output_3)
         return output_final
 
 
@@ -207,24 +199,10 @@ class MultiHeadSelfAttention(nn.Module):
         self.d_k = d_model // num_heads
         self.d_v = d_model // num_heads
 
-        self.weight_query = nn.Parameter(torch.empty((self.num_heads*self.d_k, self.d_model), dtype=dtype))
-        self.weight_key = nn.Parameter(torch.empty((self.num_heads*self.d_k, self.d_model), dtype=dtype))
-        self.weight_value = nn.Parameter(torch.empty((self.num_heads*self.d_v, self.d_model), dtype=dtype))
-        self.weight_output = nn.Parameter(torch.empty((self.d_model, self.num_heads*self.d_v), dtype=dtype))
-
-        ## initialize
-        std_query_key = math.sqrt(2/(self.num_heads*self.d_k + self.d_model))
-        std_value_output = math.sqrt(2/(self.num_heads*self.d_v + self.d_model))
-        nn.init.trunc_normal_(self.weight_query, mean=0, std=std_query_key, a=-3*std_query_key, b=3*std_query_key)
-        nn.init.trunc_normal_(self.weight_key, mean=0, std=std_query_key, a=-3*std_query_key, b=3*std_query_key)
-        nn.init.trunc_normal_(self.weight_value, mean=0, std=std_value_output, a=-3*std_value_output, b=3*std_value_output)
-        nn.init.trunc_normal_(self.weight_output, mean=0, std=std_value_output, a=-3*std_value_output, b=3*std_value_output)
-
-        if not device:
-            self.weight_query = self.weight_query.to(device)
-            self.weight_key = self.weight_key.to(device)
-            self.weight_value = self.weight_value.to(device)
-            self.weight_output = self.weight_output.to(device)
+        self.q_proj = Linear(out_features=self.num_heads*self.d_k, in_features=self.d_model, device=device, dtype=dtype)
+        self.k_proj = Linear(out_features=self.num_heads*self.d_k, in_features=self.d_model, device=device, dtype=dtype)
+        self.v_proj = Linear(out_features=self.num_heads*self.d_v, in_features=self.d_model, device=device, dtype=dtype)
+        self.output_proj = Linear(out_features=self.d_model, in_features=self.num_heads*self.d_v, device=device, dtype=dtype)
     
     def forward(self, x: torch.Tensor, positional_embedding_layer: Union[nn.Module, None] = None, token_positions: Union[torch.Tensor, None] = None) -> torch.Tensor:
         """
@@ -234,9 +212,9 @@ class MultiHeadSelfAttention(nn.Module):
         """
 
         ## compute the key, value, and query projections
-        Q = einsum(self.weight_query, x, "d_out d_model, ... seq_len d_model -> ... seq_len d_out")
-        K = einsum(self.weight_key, x, "d_out d_model, ... seq_len d_model -> ... seq_len d_out")
-        V = einsum(self.weight_value, x, "d_out d_model, ... seq_len d_model -> ... seq_len d_out")
+        Q = self.q_proj(x)
+        K = self.k_proj(x)
+        V = self.v_proj(x)
 
         ## rearrange
         Q_heads = rearrange(Q, "... seq_len (num_heads d_k) -> ... num_heads seq_len d_k", num_heads=self.num_heads, d_k=self.d_k)
@@ -258,7 +236,7 @@ class MultiHeadSelfAttention(nn.Module):
         attention = rearrange(attention_heads, "... num_heads seq_len d_v -> ... seq_len (num_heads d_v)")
 
         ## final output
-        output = einsum(self.weight_output, attention, "d_model d_in, ... seq_len d_in -> ... seq_len d_model")
+        output = self.output_proj(attention)
 
         return output
 
