@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 import math
 from einops import rearrange, einsum
+from typing import Union
 
 class Linear(nn.Module):
     """
@@ -172,7 +173,7 @@ def softmax(x: torch.Tensor, dim: int):
     return num/den
 
 
-def Attention(queries: torch.Tensor, keys: torch.Tensor, values: torch.Tensor, mask: torch.Tensor| None = None):
+def Attention(queries: torch.Tensor, keys: torch.Tensor, values: torch.Tensor, mask: Union[torch.Tensor, None] = None):
     """
     Scaled dot-product attention
     Input:
