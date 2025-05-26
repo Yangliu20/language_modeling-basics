@@ -92,7 +92,7 @@ def run_swiglu(
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
     layer = model.positionwise_feedforward(d_model=d_model, d_ff=d_ff)
-    layer.load_state_dict({"w1": w1_weight, "w2": w2_weight, "w3": w3_weight})
+    layer.load_state_dict({"w1.weight": w1_weight, "w2.weight": w2_weight, "w3.weight": w3_weight})
     return layer(in_features)
 
 
@@ -150,10 +150,10 @@ def run_multihead_self_attention(
     """
     attention_layer = model.MultiHeadSelfAttention(d_model=d_model, num_heads=num_heads)
     attention_layer.load_state_dict({
-        "weight_query": q_proj_weight, 
-        "weight_key": k_proj_weight, 
-        "weight_value": v_proj_weight, 
-        "weight_output": o_proj_weight
+        "q_proj.weight": q_proj_weight, 
+        "k_proj.weight": k_proj_weight, 
+        "v_proj.weight": v_proj_weight, 
+        "output_proj.weight": o_proj_weight
     })
     return attention_layer(in_features)
 
@@ -198,10 +198,10 @@ def run_multihead_self_attention_with_rope(
     attention_layer = model.MultiHeadSelfAttention(d_model=d_model, num_heads=num_heads)
     rope = model.RotaryPositionalEmbedding(theta=theta, d_k=d_model//num_heads, max_seq_len=max_seq_len)
     attention_layer.load_state_dict({
-        "weight_query": q_proj_weight, 
-        "weight_key": k_proj_weight, 
-        "weight_value": v_proj_weight, 
-        "weight_output": o_proj_weight
+        "q_proj.weight": q_proj_weight, 
+        "k_proj.weight": k_proj_weight, 
+        "v_proj.weight": v_proj_weight, 
+        "output_proj.weight": o_proj_weight
     })
     return attention_layer(x=in_features, positional_embedding_layer=rope, token_positions=token_positions)
 
