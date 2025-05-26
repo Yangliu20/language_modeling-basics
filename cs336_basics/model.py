@@ -172,6 +172,25 @@ def softmax(x: torch.Tensor, dim: int):
     return num/den
 
 
+def Attention(queries: torch.Tensor, keys: torch.Tensor, values: torch.Tensor, mask: torch.Tensor| None = None):
+    """
+    Scaled dot-product attention
+    Input:
+        queries: torch.Tensor (batch_size, ..., seq_len_q, d_k)
+        keys: torch.Tensor (batch_size, ..., seq_len_k, d_k)
+        values: torch.Tensor (batch_size, ..., seq_len_k, d_v)
+    """
+    d_k = queries.shape[-1]
+    q_dot_k_scaled = einsum(queries, keys, "... seq_len_q d_k, ... seq_len_k d_k -> ... seq_len_q seq_len_k") / math.sqrt(d_k)
+    if mask is not None:
+        q_dot_k_scaled[..., ~mask] = -float('inf')
+    softmax_q_dot_k_scaled = softmax(q_dot_k_scaled, dim=-1)
+    output = einsum(softmax_q_dot_k_scaled, values, "... seq_len_q seq_len_k, ... seq_len_k d_v -> ... seq_len_q d_v")
+
+    return output
+
+
+
 if __name__ == "__main__":
 
     # layer = Linear(in_features=20, out_features=10)
