@@ -192,6 +192,69 @@ def Attention(queries: torch.Tensor, keys: torch.Tensor, values: torch.Tensor, m
     return output
 
 
+class MultiHeadSelfAttention(nn.Module):
+    """
+    Causal multi-head self-attention
+    """
+    def __init__(self, d_model: int, num_heads: int, device=None, dtype=None):
+        """
+        d_model: int Dimensionality of the Transformer block inputs. 
+        num_heads: int Number of heads to use in multi-head self-attention.
+        """
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads
+        self.d_v = d_model // num_heads
+
+        self.weight_query = nn.Parameter(torch.empty((self.num_heads*self.d_k, self.d_model), dtype=dtype))
+        self.weight_key = nn.Parameter(torch.empty((self.num_heads*self.d_k, self.d_model), dtype=dtype))
+        self.weight_value = nn.Parameter(torch.empty((self.num_heads*self.d_v, self.d_model), dtype=dtype))
+        self.weight_output = nn.Parameter(torch.empty((self.d_model, self.num_heads*self.d_v), dtype=dtype))
+
+        ## initialize
+        std_query_key = math.sqrt(2/(self.num_heads*self.d_k + self.d_model))
+        std_value_output = math.sqrt(2/(self.num_heads*self.d_v + self.d_model))
+        nn.init.trunc_normal_(self.weight_query, mean=0, std=std_query_key, a=-3*std_query_key, b=3*std_query_key)
+        nn.init.trunc_normal_(self.weight_key, mean=0, std=std_query_key, a=-3*std_query_key, b=3*std_query_key)
+        nn.init.trunc_normal_(self.weight_value, mean=0, std=std_value_output, a=-3*std_value_output, b=3*std_value_output)
+        nn.init.trunc_normal_(self.weight_output, mean=0, std=std_value_output, a=-3*std_value_output, b=3*std_value_output)
+
+        if not device:
+            self.weight_query = self.weight_query.to(device)
+            self.weight_key = self.weight_key.to(device)
+            self.weight_value = self.weight_value.to(device)
+            self.weight_output = self.weight_output.to(device)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        x dim: (batch_size, seq_len, d_model)
+        """
+
+        ## compute the key, value, and query projections
+        Q = einsum(self.weight_query, x, "d_out d_model, ... seq_len d_model -> ... seq_len d_out")
+        K = einsum(self.weight_key, x, "d_out d_model, ... seq_len d_model -> ... seq_len d_out")
+        V = einsum(self.weight_value, x, "d_out d_model, ... seq_len d_model -> ... seq_len d_out")
+
+        ## rearrange
+        Q_heads = rearrange(Q, "... seq_len (num_heads d_k) -> ... num_heads seq_len d_k", num_heads=self.num_heads, d_k=self.d_k)
+        K_heads = rearrange(K, "... seq_len (num_heads d_k) -> ... num_heads seq_len d_k", num_heads=self.num_heads, d_k=self.d_k)
+        V_heads = rearrange(V, "... seq_len (num_heads d_v) -> ... num_heads seq_len d_v", num_heads=self.num_heads, d_v=self.d_v)
+
+        ## create causal mask
+        seq_len_q = Q.shape[-2]
+        seq_len_k = K.shape[-2]
+        causal_mask = ~torch.triu(torch.ones((seq_len_q, seq_len_k), dtype=torch.bool), diagonal=1)
+
+        ## apply attention function
+        attention_heads = Attention(queries=Q_heads, keys=K_heads, values=V_heads, mask=causal_mask) # (... num_heads, seq_len, d_v)
+        attention = rearrange(attention_heads, "... num_heads seq_len d_v -> ... seq_len (num_heads d_v)")
+
+        ## final output
+        output = einsum(self.weight_output, attention, "d_model d_in, ... seq_len d_in -> ... seq_len d_model")
+
+        return output
+
 
 if __name__ == "__main__":
 
@@ -211,7 +274,12 @@ if __name__ == "__main__":
     # print(output)
 
 
-    pos_emb = RotaryPositionalEmbedding(theta=2., d_k=20, max_seq_len=7)
+    # pos_emb = RotaryPositionalEmbedding(theta=2., d_k=20, max_seq_len=7)
+    # x = torch.randn((1, 7, 20))
+    # token_positions = torch.arange(7).reshape(1, -1)
+    # pos_emb(x=x, token_positions=token_positions)
+
+    attention_layer = MultiHeadSelfAttention(d_model=20, num_heads=4)
     x = torch.randn((1, 7, 20))
-    token_positions = torch.arange(7).reshape(1, -1)
-    pos_emb(x=x, token_positions=token_positions)
+    output = attention_layer(x)
+    print(output.shape)

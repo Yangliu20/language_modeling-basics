@@ -148,7 +148,14 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_out"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    attention_layer = model.MultiHeadSelfAttention(d_model=d_model, num_heads=num_heads)
+    attention_layer.load_state_dict({
+        "weight_query": q_proj_weight, 
+        "weight_key": k_proj_weight, 
+        "weight_value": v_proj_weight, 
+        "weight_output": o_proj_weight
+    })
+    return attention_layer(in_features)
 
 
 def run_multihead_self_attention_with_rope(
