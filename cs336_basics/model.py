@@ -179,6 +179,7 @@ def Attention(queries: torch.Tensor, keys: torch.Tensor, values: torch.Tensor, m
         queries: torch.Tensor (batch_size, ..., seq_len_q, d_k)
         keys: torch.Tensor (batch_size, ..., seq_len_k, d_k)
         values: torch.Tensor (batch_size, ..., seq_len_k, d_v)
+        mask: torch.Tensor (seq_len_q, seq_len_k)
     """
     d_k = queries.shape[-1]
     q_dot_k_scaled = einsum(queries, keys, "... seq_len_q d_k, ... seq_len_k d_k -> ... seq_len_q seq_len_k") / math.sqrt(d_k)
