@@ -2,6 +2,8 @@ from collections.abc import Callable, Iterable
 from typing import Optional
 import torch
 import math
+import numpy
+
 
 class SGD(torch.optim.Optimizer):
     """
@@ -100,3 +102,34 @@ def learning_rate_cosine_schedule(t: int, lr_max: float, lr_min: float, warmup_i
         return lr_min + (1 + math.cos( (t - warmup_iters) / (cosine_cycle_iters - warmup_iters) * math.pi )) * (lr_max - lr_min) / 2
     else:
         return lr_min
+
+
+def gradient_clipping(params: Iterable[torch.nn.Parameter], max_l2_norm: float, eps=1e-6):
+    """
+    A function to scale down gradient if its l2 norm is larger than `max_l2_norm`
+    Input parameters:
+        params, list of parameters to apply gradient clipping on
+        max_l2_norm, float
+    """
+
+    # get total l2 norm
+    l2_norm = 0.
+    for p in params:
+        if p.grad is None:
+            continue
+        l2_norm += (torch.linalg.vector_norm(p.grad, ord=2).item()) ** 2
+    l2_norm = math.sqrt(l2_norm)
+
+    # no clipping
+    if l2_norm <= max_l2_norm:
+        return
+    
+    # clipping
+    factor = max_l2_norm / (l2_norm + eps)
+    for p in params:
+        if p.grad is None:
+            continue
+        p.grad = p.grad * factor
+    
+    return 
+
