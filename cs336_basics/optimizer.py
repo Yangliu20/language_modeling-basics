@@ -82,3 +82,21 @@ class AdamW(torch.optim.Optimizer):
                 state["second_moment"] = second_moment
 
         return loss
+
+
+def learning_rate_cosine_schedule(t: int, lr_max: float, lr_min: float, warmup_iters: int, cosine_cycle_iters: int):
+    """
+    Cosine annealing scheduler
+    Input parameters:
+        t, current iteration
+        lr_max, maximum learning rate during the schedule
+        lr_min, minimum learning rate during the schedule
+        warmup_iters, number of warm-up iterations
+        cosine_cycle_iters, number of cosine annealing iterations
+    """
+    if t < warmup_iters:
+        return t / warmup_iters * lr_max
+    elif t <= cosine_cycle_iters:
+        return lr_min + (1 + math.cos( (t - warmup_iters) / (cosine_cycle_iters - warmup_iters) * math.pi )) * (lr_max - lr_min) / 2
+    else:
+        return lr_min
