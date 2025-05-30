@@ -12,6 +12,7 @@ from cs336_basics import train_bpe
 from cs336_basics import tokenizer
 from cs336_basics import model
 from cs336_basics import utils
+from cs336_basics import optimizer
 
 
 def run_linear(
@@ -501,7 +502,7 @@ def get_adamw_cls() -> type[torch.optim.Optimizer]:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    raise NotImplementedError
+    return optimizer.AdamW
 
 
 def run_get_lr_cosine_schedule(
