@@ -13,6 +13,7 @@ from cs336_basics import tokenizer
 from cs336_basics import model
 from cs336_basics import utils
 from cs336_basics import optimizer
+from cs336_basics import data_loader
 
 
 def run_linear(
@@ -451,7 +452,7 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    return data_loader.data_loading(dataset, batch_size, context_length, device)
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
