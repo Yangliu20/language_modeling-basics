@@ -14,6 +14,7 @@ from cs336_basics import model
 from cs336_basics import utils
 from cs336_basics import optimizer
 from cs336_basics import data_loader
+from cs336_basics import model_checkpoint
 
 
 def run_linear(
@@ -556,7 +557,7 @@ def run_save_checkpoint(
             we've completed.
         out (str | os.PathLike | BinaryIO | IO[bytes]): Path or file-like object to serialize the model, optimizer, and iteration to.
     """
-    raise NotImplementedError
+    model_checkpoint.save_checkpoint(model, optimizer, iteration, out)
 
 
 def run_load_checkpoint(
@@ -577,7 +578,8 @@ def run_load_checkpoint(
     Returns:
         int: the previously-serialized number of iterations.
     """
-    raise NotImplementedError
+    it = model_checkpoint.load_checkpoint(src, model, optimizer)
+    return it
 
 
 def get_tokenizer(
