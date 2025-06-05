@@ -186,11 +186,11 @@ if __name__ == "__main__":
     input_path = "/home/ec2-user/data/TinyStoriesV2-GPT4-valid.txt"
     # "/home/ec2-user/assignment1-basics/tests/fixtures/corpus.en"
     # "/home/ec2-user/data/simple_text.txt"
-    vocab_size = 500
+    vocab_size = 10000
     special_tokens = ["<|endoftext|>"]
 
     start = time.time()
-    vocab, merges = train_bpe(input_path, vocab_size, special_tokens)
+    vocab, merges = train_bpe(input_path, vocab_size, special_tokens, num_processes=8)
     end = time.time()
 
     # print(merges)

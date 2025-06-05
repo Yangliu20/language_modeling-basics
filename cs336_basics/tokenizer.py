@@ -3,6 +3,8 @@ from typing import Iterable, Iterator
 import ast
 import json
 import regex as re
+import numpy as np
+import pickle
 
 class tokenizer():
 
@@ -139,7 +141,8 @@ if __name__ == "__main__":
     tokenizer_bpe = tokenizer.from_files(
         vocab_filepath=f'{bpe_train_path}vocab.json', 
         merges_filepath=f'{bpe_train_path}merges.txt', 
-        special_tokens=["<|endoftext|>", "heyyyy", "<|endoftext|><|endoftext|>"]
+        special_tokens=["<|endoftext|>"]
+        # special_tokens=["<|endoftext|>", "heyyyy", "<|endoftext|><|endoftext|>"]
     )
 
     # tokenizer_bpe = tokenizer(
@@ -147,11 +150,20 @@ if __name__ == "__main__":
     #     merges=[(b't', b'h'), (b' ', b'c'), (b' ', b'a'), (b'th', b'e'), (b' a', b't')], 
     # )
 
-    input_text = "Hello, how <|endoftext|><|endoftext|> are you?<|endoftext|>"
+    # input_text = "Hello, how <|endoftext|><|endoftext|> are you?<|endoftext|>"
     # input_text = "heyyyy, Here is some text i'd like to encode <|endoftext|>"
     # input_text = "the cat ate"
 
+    input_text_path = "/home/ec2-user/data/TinyStoriesV2-GPT4-valid.txt"
+    with open(input_text_path, 'r') as file:
+        input_text = file.read()
+    
     encode_ids = tokenizer_bpe.encode(input_text)
-    print(encode_ids)
-    output_text = tokenizer_bpe.decode(ids=encode_ids)
-    print(input_text == output_text)
+    # print(encode_ids)
+    # output_text = tokenizer_bpe.decode(ids=encode_ids)
+    # print(input_text == output_text)
+
+    encode_ids_np = np.array(encode_ids, dtype=np.uint16)
+    output_filename = "/home/ec2-user/data/TinyStoriesV2-GPT4-valid-encoded.pkl"
+    with open(output_filename, 'wb') as file:
+        pickle.dump(encode_ids_np, file)
