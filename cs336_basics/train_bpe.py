@@ -104,6 +104,7 @@ def train_bpe(
         freq_chunk = p.get()
         for s in freq_chunk:
             freq[s] = freq.get(s, 0) + freq_chunk[s]
+    print("Pre-tokenization finished.")
 
 
     ### count frequency of every successive pair of bytes
@@ -120,11 +121,15 @@ def train_bpe(
             cnt_bytes_pairs[bytes_pair] = cnt_bytes_pairs.get(bytes_pair, 0) + freq[s]*len(bytes_pair_to_index[bytes_pair])
             appear_bytes_pairs[bytes_pair] = {**appear_bytes_pairs.get(bytes_pair, {}), **{s: bytes_pair_to_index[bytes_pair]}}
 
+    print("Count frequency of every pair finished.")
 
     ### merge
     merges = []
 
     while len_vocab < vocab_size:
+
+        if len_vocab % 100 == 0:
+            print(f"Vocab size {len_vocab}")
         
         if len(cnt_bytes_pairs) == 0:
             break
@@ -134,22 +139,32 @@ def train_bpe(
 
         ### find the pair with largest frequency
         merged_pair = max(cnt_bytes_pairs, key=lambda k: (cnt_bytes_pairs[k], k))
+        if cnt_bytes_pairs[merged_pair] <= 0:
+            break
         merges.append(merged_pair)
         vocab[len_vocab] = merged_pair[0]+merged_pair[1]
         len_vocab += 1
         # print("Merge", merged_pair)
 
         
-        bytes_to_be_merged = appear_bytes_pairs[merged_pair]
-        str_ind_list = [(s, bytes_to_be_merged[s]) for s in bytes_to_be_merged]
-        for s, indices in str_ind_list:
+        bytes_to_be_merged = appear_bytes_pairs[merged_pair].copy()
+        for s in bytes_to_be_merged:
 
             ### update word-freq dict
-            s_new = s[:indices[0]] + tuple([s[indices[0]]+s[indices[0]+1]])
-            for k in range(1, len(indices)):
-                s_new += s[indices[k-1]+2:indices[k]]
-                s_new += tuple([s[indices[k]]+s[indices[k]+1]])
-            s_new += s[indices[-1]+2:]
+            j = 0
+            s_new = []
+            while j <= len(s)-2:
+                # print((curr[j], curr[j+1]))
+                if (s[j], s[j+1]) == merged_pair: ## merge! 
+                    s_new.append(s[j]+s[j+1])
+                    j += 2
+                else:
+                    s_new.append(s[j])
+                    j += 1
+            if j == len(s)-1:
+                s_new.append(s[j])
+            s_new = tuple(s_new)
+
             freq[s_new] = freq.get(s_new, 0) + freq[s]
             # print(s, s_new)
             # print(s, indices, merged_pair)
@@ -183,7 +198,7 @@ def train_bpe(
 
 if __name__ == "__main__":
 
-    input_path = "/home/ec2-user/data/TinyStoriesV2-GPT4-valid.txt"
+    input_path = "/home/ec2-user/data/TinyStoriesV2-GPT4-train.txt"
     # "/home/ec2-user/assignment1-basics/tests/fixtures/corpus.en"
     # "/home/ec2-user/data/simple_text.txt"
     vocab_size = 10000
@@ -204,3 +219,5 @@ if __name__ == "__main__":
     with open(f'{result_path}vocab.json', 'w') as file:
         json.dump({k: str(vocab[k]) for k in vocab}, file)
 
+    longest_token_id = max(vocab, key=lambda k: len(vocab[k]))
+    print("Longest token", vocab[longest_token_id])
