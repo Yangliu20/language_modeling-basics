@@ -164,16 +164,21 @@ if __name__ == "__main__":
 
     for dataset in ["valid", "train"]:
         input_text_path = f"/home/ec2-user/data/TinyStoriesV2-GPT4-{dataset}.txt"
-        with open(input_text_path, 'r') as file:
-            input_text = file.read()
-        print(f"Text read from {input_text_path}")
+        # with open(input_text_path, 'r') as file:
+        #     input_text = file.read()
+        # print(f"Text read from {input_text_path}")
+        file = open(input_text_path, 'r')
         
         start = time.time()
-        encode_ids = tokenizer_bpe.encode(input_text)
+        # encode_ids = tokenizer_bpe.encode(input_text)
+        encode_ids_iterator = tokenizer_bpe.encode_iterable(file)
+        encode_ids = []
+        for id in encode_ids_iterator:
+            encode_ids.append(id)
         encode_ids_np = np.array(encode_ids, dtype=np.uint16)
         print("Token count", encode_ids_np.shape[0])
 
-        output_filename = f"/home/ec2-user/data/TinyStoriesV2-GPT4-{dataset}-encoded.npy"
+        output_filename = f"/home/ec2-user/data/TinyStoriesV2-GPT4-{dataset}-encoded-iterable.npy"
         np.save(output_filename, encode_ids_np)
         end = time.time()
 
