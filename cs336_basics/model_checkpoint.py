@@ -13,7 +13,7 @@ def save_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer, it
         "iteration": iteration
     }
     torch.save(data, out)
-    print("Checkpoint saved.")
+    print(f"Checkpoint saved to {out}.")
     return
 
 def load_checkpoint(src: Union[str, os.PathLike, typing.BinaryIO, typing.IO[bytes]], model: torch.nn.Module, optimizer: torch.optim.Optimizer):

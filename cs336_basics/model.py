@@ -311,6 +311,7 @@ class TransformerLM(nn.Module):
     def forward(self, x: torch.Tensor):
         """
         x: Int[Tensor, "batch_size sequence_length"]
+        output: Int[Tensor, "batch_size sequence_length vocab_size"], unnormalized prediction scores
         """
         
         ## embedding -> transformer blocks
