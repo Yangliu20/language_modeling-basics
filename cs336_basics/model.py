@@ -124,7 +124,7 @@ class RotaryPositionalEmbedding(nn.Module):
 
         # i: token position; k: embedding index
         angle = einsum(torch.arange(max_seq_len), 1/torch.pow(theta, (torch.arange(d_k/2))*2/d_k), "token_id, embed_id -> token_id embed_id")
-        print(angle)
+        # print(angle)
         self.register_buffer("sin", torch.sin(angle), persistent=False)
         self.register_buffer("cos", torch.cos(angle), persistent=False)
 
