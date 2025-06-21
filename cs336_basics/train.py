@@ -3,10 +3,12 @@ import torch
 import numpy as np
 import random
 import os
-from cs336_basics.optimizer import *
-from cs336_basics.data_loader import *
-from cs336_basics.utils import *
-from cs336_basics.model_checkpoint import *
+from optimizer import *
+from data_loader import *
+from utils import *
+from model_checkpoint import *
+from model import *
+import json
 
 class trainer():
     """
@@ -85,9 +87,9 @@ class trainer():
 
         # if os.is_dir(self.result_path):
         #     raise ValueError(f"{self.result_path} already trained.")
-        os.makedirs(self.result_path)
+        os.makedirs(self.result_path, exist_ok=True)
         self.ckpt_dir = os.path.join(self.result_path, "model_checkpoints")
-        os.makedirs(self.ckpt_dir)
+        os.makedirs(self.ckpt_dir, exist_ok=True)
         self.log_txt_path = os.path.join(self.result_path, "training_log.txt")
 
         print(self.ckpt_dir)
@@ -128,13 +130,17 @@ class trainer():
         for i in range(self.n_steps):
 
             model.train()
-            lr_i = self._get_learning_rate(i)
+            lr_i = self._get_learning_rate(i+1)
             optimizer_i = AdamW(model.parameters(), lr=lr_i, betas=self.optim_betas, weight_decay=self.optim_weight_decay, eps=self.optim_eps)
 
             optimizer_i.zero_grad()
             loss_step_i = 0.
             for _ in range(self.gradient_accumulation_steps):
                 train_x, train_y = self._get_train_batch()
+                train_x = train_x.to(torch.long)
+                train_y = train_y.to(torch.long)
+                # print(train_x)
+                # print(train_y)
                 pred_y = model(train_x)
                 loss = cross_entropy_loss(preds=pred_y, targets=train_y)
                 loss.backward()
@@ -142,12 +148,15 @@ class trainer():
             optimizer_i.step()
             loss_step_i /= self.gradient_accumulation_steps # average loss per training batch
 
-            if i % self.eval_every_steps == 0:
+            if i % self.eval_every_steps == 0 or i == (self.n_steps-1):
                 model.eval()
                 with torch.no_grad():
                     eval_loss_step_i = 0.
-                    for _ in range(self.n_eval_batches):
+                    factor = 10 if i==(self.n_steps-1) else 1
+                    for _ in range(self.n_eval_batches*factor):
                         valid_x, valid_y = self._get_valid_batch()
+                        valid_x = valid_x.to(torch.long)
+                        valid_y = valid_y.to(torch.long)
                         valid_pred_y = model(valid_x)
                         vloss = cross_entropy_loss(preds=valid_pred_y, targets=valid_y)
                         eval_loss_step_i += vloss
@@ -168,6 +177,56 @@ class trainer():
 
 
 
+def parse_config(config_path):
+
+    with open(config_path) as f:
+        config_dict = json.load(f)
+    model_params = config_dict["model_architecture"]
+    training_params = config_dict["model_training"]
+    training_params["context_length"] = model_params["context_length"]
+
+    return model_params, training_params
+
+
+def train_model(config_path, train_data_path, valid_data_path, result_path, seed):
+    
+    model_args, training_args = parse_config(config_path)
+    print("Training model with:")
+    print(model_args)
+    print(training_args)
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print("Device", device)
+    model_lm = TransformerLM(
+        vocab_size = model_args["vocab_size"], 
+        context_length = model_args["context_length"], 
+        num_layers = model_args["num_layers"], 
+        d_model = model_args["d_model"], 
+        num_heads = model_args["num_heads"], 
+        d_ff = model_args["d_ff"], 
+        rope_theta = model_args["rope_theta"], 
+    ).to(device)
+
+    trainer_lm = trainer(
+        model=model_lm, 
+        train_data_path=train_data_path, 
+        valid_data_path=valid_data_path, 
+        training_args=training_args, 
+        result_path=result_path, 
+        device=device, 
+        seed=seed
+    )
+    trainer_lm.train()
+
+if __name__ == "__main__":
+
+    train_model(
+        config_path = "/home/ec2-user/language_modeling-basics/cs336_basics/model_base_config.json", 
+        train_data_path = "/home/ec2-user/data/TinyStoriesV2-GPT4-train-encoded-iterable.npy", 
+        valid_data_path = "/home/ec2-user/data/TinyStoriesV2-GPT4-valid-encoded-iterable.npy", 
+        result_path = "/home/ec2-user/model/test_run_20250620", 
+        seed=101
+    )
 
 
 
