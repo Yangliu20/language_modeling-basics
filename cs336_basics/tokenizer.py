@@ -6,6 +6,7 @@ import regex as re
 import numpy as np
 import pickle
 import time
+import boto3
 
 class tokenizer():
 
@@ -187,3 +188,11 @@ if __name__ == "__main__":
 
     # with open(output_filename, 'wb') as file:
     #     pickle.dump(encode_ids_np, file)
+
+
+    ### upload datasets onto s3
+    s3 = boto3.client('s3')
+    BUCKET_NAME = "llm-cs336"
+    for dataset in ["valid", "train"]:
+        filename = f"/home/ec2-user/data/TinyStoriesV2-GPT4-{dataset}-encoded-iterable.npy"
+        s3.upload_file(filename, BUCKET_NAME, f"data/TinyStoriesV2-GPT4-{dataset}-encoded-iterable.npy")
