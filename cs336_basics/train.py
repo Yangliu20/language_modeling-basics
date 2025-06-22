@@ -169,7 +169,7 @@ class trainer():
                 "iter": i, 
                 "lr": lr_i, 
                 "train_loss": loss_step_i, 
-                **({"valid_loss": eval_loss_step_i} if i % self.eval_every_steps == 0 else {})
+                **({"valid_loss": eval_loss_step_i} if i % self.eval_every_steps == 0 or i == (self.n_steps-1) else {})
             }
             self._log_metrics(log_dict)
             save_checkpoint(model=model, optimizer=optimizer_i, iteration=i, out=os.path.join(self.ckpt_dir, f"checkpoint_{i}.ckpt"))
