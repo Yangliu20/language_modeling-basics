@@ -8,7 +8,10 @@ from data_loader import *
 from utils import *
 from model_checkpoint import *
 from model import *
+from s3_utils import upload_dir
 import json
+import boto3
+import shutil
 
 class trainer():
     """
@@ -187,13 +190,38 @@ def parse_config(config_path):
 
     return model_params, training_params
 
+    
+def check_params_count(torch_model):
+    ### check parameter count
+    total_params_cnt = 0
+    trainable_params_cnt = 0
+    for p in torch_model.parameters():
+        total_params_cnt += p.numel()
+        if p.requires_grad:
+            trainable_params_cnt += p.numel()
+    r = trainable_params_cnt/total_params_cnt*100
+    print("Count of all parameters:", total_params_cnt)
+    print("Count of trainable parameters:", trainable_params_cnt)
+    print(f"Percentage of trainable parameters: {r:.2f}%")
 
-def train_model(config_path, train_data_path, valid_data_path, result_path, seed):
+
+def train_model(config_path, train_data_path, valid_data_path, result_path, overwrite, seed):
     
     model_args, training_args = parse_config(config_path)
     print("Training model with:")
     print(model_args)
     print(training_args)
+
+    if os.path.isdir(result_path):
+        if not overwrite:
+            raise ValueError(f"{result_path} already trained.")
+        else:
+            shutil.rmtree(result_path)
+    os.makedirs(result_path, exist_ok=True)
+    with open(f"{result_path}/model_args.json", 'w') as fp:
+        json.dump(model_args, fp)
+    with open(f"{result_path}/training_args.json", 'w') as fp:
+        json.dump(training_args, fp)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print("Device", device)
@@ -206,6 +234,8 @@ def train_model(config_path, train_data_path, valid_data_path, result_path, seed
         d_ff = model_args["d_ff"], 
         rope_theta = model_args["rope_theta"], 
     ).to(device)
+
+    check_params_count(model_lm)
 
     trainer_lm = trainer(
         model=model_lm, 
@@ -220,14 +250,29 @@ def train_model(config_path, train_data_path, valid_data_path, result_path, seed
 
 if __name__ == "__main__":
 
+    s3 = boto3.client('s3')
+
+    ## download data from s3
+    download_dir = "/home/ec2-user/data_download"
+    BUCKET_NAME = "llm-cs336"
+    os.makedirs(download_dir, exist_ok=True)
+    for dataset in ["train", "valid"]:
+        s3_key = f"data/TinyStoriesV2-GPT4-{dataset}-encoded-iterable.npy"
+        local_path = f"{download_dir}/TinyStoriesV2-GPT4-{dataset}-encoded-iterable.npy"
+        s3.download_file(BUCKET_NAME, s3_key, local_path)
+        print(f"{s3_key} downloaded. ")
+
     train_model(
         config_path = "/home/ec2-user/language_modeling-basics/cs336_basics/model_base_config.json", 
-        train_data_path = "/home/ec2-user/data/TinyStoriesV2-GPT4-train-encoded-iterable.npy", 
-        valid_data_path = "/home/ec2-user/data/TinyStoriesV2-GPT4-valid-encoded-iterable.npy", 
+        train_data_path = f"{download_dir}/TinyStoriesV2-GPT4-train-encoded-iterable.npy", 
+        valid_data_path = f"{download_dir}/TinyStoriesV2-GPT4-valid-encoded-iterable.npy", 
         result_path = "/home/ec2-user/model/test_run_20250620", 
+        overwrite = True, 
         seed=101
     )
 
+    ## upload results to s3
+    upload_dir(BUCKET_NAME, directory_path="/home/ec2-user/model/test_run_20250620", s3_prefix="model/test_run_20250620")
 
 
 # model:
