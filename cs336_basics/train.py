@@ -12,6 +12,7 @@ from s3_utils import upload_dir
 import json
 import boto3
 import shutil
+import time
 
 class trainer():
     """
@@ -120,6 +121,7 @@ class trainer():
         if "valid_loss" in log_dict:
             log_str += f", valid loss {log_dict['valid_loss']}"
         log_str += f", learning rate {log_dict['lr']}"
+        log_str += f", time taken {log_dict['time_taken']}"
         print(log_str)
         with open(self.log_txt_path, "w") as file:
             file.write(log_str+"\n")
@@ -131,7 +133,8 @@ class trainer():
         self.valid_data = np.load(self.valid_data_path, mmap_mode='r')
 
         for i in range(self.n_steps):
-
+            
+            start = time.time()
             model.train()
             lr_i = self._get_learning_rate(i+1)
             optimizer_i = AdamW(model.parameters(), lr=lr_i, betas=self.optim_betas, weight_decay=self.optim_weight_decay, eps=self.optim_eps)
@@ -156,20 +159,23 @@ class trainer():
                 with torch.no_grad():
                     eval_loss_step_i = 0.
                     factor = 10 if i==(self.n_steps-1) else 1
-                    for _ in range(self.n_eval_batches*factor):
+                    tot_eval_batches = self.n_eval_batches*factor
+                    for _ in range(tot_eval_batches):
                         valid_x, valid_y = self._get_valid_batch()
                         valid_x = valid_x.to(torch.long)
                         valid_y = valid_y.to(torch.long)
                         valid_pred_y = model(valid_x)
                         vloss = cross_entropy_loss(preds=valid_pred_y, targets=valid_y)
                         eval_loss_step_i += vloss
-                    eval_loss_step_i /= self.n_eval_batches # average loss per validation batch
+                    eval_loss_step_i /= tot_eval_batches # average loss per validation batch
             
+            end = time.time()
             log_dict = {
                 "iter": i, 
                 "lr": lr_i, 
                 "train_loss": loss_step_i, 
-                **({"valid_loss": eval_loss_step_i} if i % self.eval_every_steps == 0 or i == (self.n_steps-1) else {})
+                **({"valid_loss": eval_loss_step_i} if i % self.eval_every_steps == 0 or i == (self.n_steps-1) else {}), 
+                "time_taken": round(end-start, 2)
             }
             self._log_metrics(log_dict)
             save_checkpoint(model=model, optimizer=optimizer_i, iteration=i, out=os.path.join(self.ckpt_dir, f"checkpoint_{i}.ckpt"))
@@ -234,6 +240,7 @@ def train_model(config_path, train_data_path, valid_data_path, result_path, over
         d_ff = model_args["d_ff"], 
         rope_theta = model_args["rope_theta"], 
     ).to(device)
+    # model_lm.compile()
 
     check_params_count(model_lm)
 
@@ -262,17 +269,21 @@ if __name__ == "__main__":
         s3.download_file(BUCKET_NAME, s3_key, local_path)
         print(f"{s3_key} downloaded. ")
 
+
+    ## model training happens here 
+    run_version = "test_run_20250622"
+    local_result_path = f"/home/ec2-user/model/{run_version}"
     train_model(
         config_path = "/home/ec2-user/language_modeling-basics/cs336_basics/model_base_config.json", 
         train_data_path = f"{download_dir}/TinyStoriesV2-GPT4-train-encoded-iterable.npy", 
         valid_data_path = f"{download_dir}/TinyStoriesV2-GPT4-valid-encoded-iterable.npy", 
-        result_path = "/home/ec2-user/model/test_run_20250620", 
+        result_path = local_result_path, 
         overwrite = True, 
         seed=101
     )
 
     ## upload results to s3
-    upload_dir(BUCKET_NAME, directory_path="/home/ec2-user/model/test_run_20250620", s3_prefix="model/test_run_20250620")
+    upload_dir(BUCKET_NAME, directory_path=local_result_path, s3_prefix=f"model/{run_version}")
 
 
 # model:
